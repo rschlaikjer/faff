@@ -29,10 +29,17 @@ public:
   bool _usb_serial_specified = false;
   std::string _usb_serial = "";
 
+  // Transmit / receive endpoint numbers for the device.
+  int _usb_endpoint_tx = 0x02;
+  int _usb_endpoint_rx = 0x84;
+
   // The file path to try and load
   const char *_file_path = nullptr;
 
   // Load address of the file.
   // Defaults to the beginning of the flash.
   unsigned _file_lma = 0x0;
+
+  // Should we read-back the programmed data to verify it
+  bool _verify_programmed = true;
 };
