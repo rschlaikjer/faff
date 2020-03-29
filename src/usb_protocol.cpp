@@ -1,3 +1,5 @@
+#include <string.h>
+
 #include <usb_protocol.hpp>
 
 namespace UsbProto {
@@ -151,12 +153,70 @@ void Session::cmd_flash_erase_64k(uint32_t addr) {
 }
 
 void Session::cmd_flash_erase_chip() {
-  uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_ERASE_CHIP)};
+  uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_WRITE)};
   int transferred = 0;
   int ret =
       libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
                            sizeof(cmd_out), &transferred, libusb_timeout_ms);
   assert_libusb_ok(ret, "Failed to initiate chip erase");
+}
+
+void Session::cmd_flash_write(uint32_t addr, const uint8_t *data,
+                              uint8_t size) {
+  uint8_t cmd_out[size + 6] = {
+      static_cast<uint8_t>(Opcode::FLASH_WRITE),
+      ((uint8_t)(addr >> 24)),
+      ((uint8_t)(addr >> 16)),
+      ((uint8_t)(addr >> 8)),
+      ((uint8_t)(addr >> 0)),
+      size,
+  };
+  memcpy(&cmd_out[6], data, size);
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to initiate flash write");
+}
+
+void Session::cmd_flash_read(uint32_t addr, uint8_t *out_data, uint8_t size) {
+  uint8_t cmd_out[] = {
+      static_cast<uint8_t>(Opcode::FLASH_READ),
+      ((uint8_t)(addr >> 24)),
+      ((uint8_t)(addr >> 16)),
+      ((uint8_t)(addr >> 8)),
+      ((uint8_t)(addr >> 0)),
+      size,
+  };
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to request Flash status");
+  // Read response
+  ret = libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_rx, out_data,
+                             size, &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to read Flash status response");
+}
+
+void Session::cmd_flash_query_status(uint8_t *out_status) {
+  uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_QUERY_STATUS)};
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to request Flash status");
+  // Read response
+  ret = libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_rx, out_status, 1,
+                             &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to read Flash status response");
+}
+
+bool Session::flash_busy() {
+  uint8_t flash_status;
+  cmd_flash_query_status(&flash_status);
+  return flash_status &
+         static_cast<uint8_t>(UsbProto::FlashStatusFlash::FLAG_FLASH_BUSY);
 }
 
 } // namespace UsbProto

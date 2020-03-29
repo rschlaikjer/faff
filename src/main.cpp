@@ -1,6 +1,8 @@
 #include <fcntl.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -104,8 +106,10 @@ libusb_device_handle *get_device(CliArgs &args) {
 }
 
 struct BitstreamFile {
-  BitstreamFile(void *data, off_t size) : _data(data), _size(size) {}
-  void *_data;
+  BitstreamFile(uint8_t *data, off_t size) : _data(data), _size(size) {}
+  ~BitstreamFile() { munmap(_data, _size); }
+
+  uint8_t *_data;
   off_t _size;
 };
 
@@ -147,7 +151,47 @@ std::unique_ptr<BitstreamFile> open_bitstream(const char *file_path) {
   }
 
   // Wrap up and return
-  return std::make_unique<BitstreamFile>(mmapped_data, file_size);
+  return std::make_unique<BitstreamFile>(
+      reinterpret_cast<uint8_t *>(mmapped_data), file_size);
+}
+
+char nibble_to_hex(uint8_t nibble) {
+  if (nibble < 10) {
+    return '0' + nibble;
+  }
+  return 'A' + (nibble - 10);
+}
+
+void byte_to_hex(uint8_t val, char *out_buf) {
+  out_buf[0] = nibble_to_hex((val >> 4) & 0xF);
+  out_buf[1] = nibble_to_hex((val >> 4) & 0xF);
+}
+
+void print_binary_diff(uint8_t *expected, uint8_t *read, unsigned byte_count,
+                       uint32_t offset) {
+  // Two hex chars + space per byte, plus null terminator
+  const int char_count = (byte_count * 3) + 1;
+  char expected_str[char_count];
+  char read_str[char_count];
+
+  // Convert hex bytes
+  for (unsigned i = 0; i < byte_count; i++) {
+    byte_to_hex(expected[i], &expected_str[i * 3]);
+    expected_str[i * 3 + 2] = ' ';
+    byte_to_hex(read[i], &read_str[i * 3]);
+    read_str[i * 3 + 2] = ' ';
+  }
+
+  // Null terminate
+  expected_str[char_count - 1] = '\0';
+  read_str[char_count - 1] = '\0';
+
+  // Print diff
+  fprintf(stderr,
+          "Verify error for block of size %d at 0x%08x:\n"
+          "    Expected: %s\n"
+          "    Read:     %s\n",
+          byte_count, offset, expected_str, read_str);
 }
 
 int main(int argc, char **argv) {
@@ -187,22 +231,22 @@ int main(int argc, char **argv) {
 
   // Claim programming interface
   if (libusb_claim_interface(usb_handle, args._usb_interface) < 0) {
-    fprintf(stderr, "Failed to claim usb interface 0x%02x\n",
+    fprintf(stderr, "Failed to claim usb interface 0x%02" PRIx16 "\n",
             args._usb_interface);
     return EXIT_FAILURE;
   }
 
   // Get the serial for this device
   std::string serial = get_serial_for_device(usb_handle);
-  fprintf(stderr, "Claimed device %04x:%04x with serial %s\n", args._usb_vid,
-          args._usb_pid, serial.c_str());
+  fprintf(stderr, "Claimed device %04" PRIx16 ":%04" PRIx16 " with serial %s\n",
+          args._usb_vid, args._usb_pid, serial.c_str());
 
   // Wrap it in a protocol layer
   UsbProto::Session session(usb_handle, args);
 
   // Disable the target FPGA so that we can control the SPI flash
   session.cmd_fpga_reset_assert();
-  session.cmd_set_rgb_led(0, 64, 0);
+  session.cmd_set_rgb_led(0, 128, 0);
 
   // Verify we are now in programming mode
   if (!session.fpga_is_under_reset()) {
@@ -215,8 +259,74 @@ int main(int argc, char **argv) {
   uint64_t flash_unique_id;
   session.cmd_flash_identify(&flash_mfgr, &flash_device, &flash_unique_id);
   fprintf(stderr,
-          "Flash chip mfgr: 0x%02x, Device ID: 0x%02x Unique ID: 0x%016llx\n",
+          "Flash chip mfgr: 0x%02" PRIx16 ", Device ID: 0x%02" PRIx16
+          " Unique ID: 0x%016" PRIx64 "\n",
           flash_mfgr, flash_device, flash_unique_id);
+
+  // Indicator LED to yellow for act
+  session.cmd_set_rgb_led(64, 32, 0);
+
+  // Start writing the flash. Every time we touch a new 4k sector, we need to
+  // erase it before we can write it.
+  uint32_t previous_sector = 0xFFFF'FFFF;
+  for (unsigned byte_offset = 0; byte_offset < file->_size;) {
+    // Mask off the sector bits
+    uint32_t sector = byte_offset & 0xFF'FF'F0'00;
+    if (sector != previous_sector) {
+      // Start the erase operation
+      session.cmd_flash_erase_4k(sector);
+      // Wait for erase complete
+      do {
+        usleep(5'000);
+      } while (session.flash_busy());
+      // Update the prev sector value
+      previous_sector = sector;
+    }
+
+    // USB FS max packet size is 64 bytes. We have some overhead, so biggest
+    // power of 2 is 32.
+    uint8_t data[32];
+    size_t bytes_to_copy = ((long)sizeof(data)) < (file->_size - byte_offset)
+                               ? sizeof(data)
+                               : (file->_size - byte_offset);
+    memcpy(data, &file->_data[byte_offset], bytes_to_copy);
+    fprintf(stderr, "Programming block 0x%08" PRIx32 " / 0x%08lx\r",
+            byte_offset, file->_size);
+    session.cmd_flash_write(byte_offset, data, bytes_to_copy);
+
+    // Increment byte offset
+    byte_offset += sizeof(data);
+
+    // Wait for write in progress bit to clear again
+    do {
+      usleep(1'000);
+    } while (session.flash_busy());
+  }
+  fprintf(stderr, "\n");
+
+  // If it wasn't disabled, perform a re-read of the flash to verify
+  if (args._verify_programmed) {
+    for (unsigned byte_offset = 0; byte_offset < file->_size;) {
+      uint8_t data[32];
+      size_t bytes_to_copy = ((long)sizeof(data)) < (file->_size - byte_offset)
+                                 ? sizeof(data)
+                                 : (file->_size - byte_offset);
+      fprintf(stderr, "Reading block 0x%08" PRIx32 " / 0x%08lx\r", byte_offset,
+              file->_size);
+      session.cmd_flash_read(byte_offset, data, bytes_to_copy);
+
+      // Compare the read block with the real bitstream
+      if (memcmp(data, &file->_data[byte_offset], bytes_to_copy) != 0) {
+        print_binary_diff(&file->_data[byte_offset], data, bytes_to_copy,
+                          byte_offset);
+        return EXIT_FAILURE;
+      }
+
+      // Increment byte offset
+      byte_offset += sizeof(data);
+    }
+    fprintf(stderr, "\n");
+  }
 
   // Release the FPGA
   // session.cmd_fpga_reset_deassert();
@@ -226,6 +336,9 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Failed to release FPGA reset\n");
     return EXIT_FAILURE;
   }
+
+  // Idle led to low green
+  session.cmd_set_rgb_led(0, 16, 0);
 
   return EXIT_SUCCESS;
 }

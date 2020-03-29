@@ -30,6 +30,10 @@ enum class FpgaStatusFlags : uint8_t {
   FLAG_FPGA_UNDER_RESET = (1 << 0),
 };
 
+enum class FlashStatusFlash : uint8_t {
+  FLAG_FLASH_BUSY = (1 << 0),
+};
+
 class Session {
 public:
   Session(libusb_device_handle *usb_handle, CliArgs &args)
@@ -51,6 +55,10 @@ public:
   void cmd_flash_erase_32k(uint32_t addr);
   void cmd_flash_erase_64k(uint32_t addr);
   void cmd_flash_erase_chip();
+  void cmd_flash_write(uint32_t addr, const uint8_t *data, uint8_t size);
+  void cmd_flash_read(uint32_t addr, uint8_t *out_data, uint8_t size);
+  void cmd_flash_query_status(uint8_t *out_status);
+  bool flash_busy();
 
 private:
   void assert_libusb_ok(int code, const char *action);
