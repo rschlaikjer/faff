@@ -45,7 +45,8 @@ public:
   bool fpga_is_under_reset();
 
   // Flash
-  void cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device);
+  void cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device,
+                          uint64_t *out_unique_id);
 
 private:
   void assert_libusb_ok(int code, const char *action);

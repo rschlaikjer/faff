@@ -212,9 +212,11 @@ int main(int argc, char **argv) {
 
   // Get the flash chip ID
   uint8_t flash_mfgr, flash_device;
-  session.cmd_flash_identify(&flash_mfgr, &flash_device);
-  fprintf(stderr, "Flash chip mfgr: 0x%02x, Chip ID: 0x%02x\n", flash_mfgr,
-          flash_device);
+  uint64_t flash_unique_id;
+  session.cmd_flash_identify(&flash_mfgr, &flash_device, &flash_unique_id);
+  fprintf(stderr,
+          "Flash chip mfgr: 0x%02x, Device ID: 0x%02x Unique ID: 0x%016llx\n",
+          flash_mfgr, flash_device, flash_unique_id);
 
   // Release the FPGA
   // session.cmd_fpga_reset_deassert();

@@ -79,7 +79,8 @@ bool Session::fpga_is_under_reset() {
          static_cast<uint8_t>(UsbProto::FpgaStatusFlags::FLAG_FPGA_UNDER_RESET);
 }
 
-void Session::cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device) {
+void Session::cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device,
+                                 uint64_t *out_unique_id) {
   uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_IDENTIFY)};
   int transferred = 0;
   int ret =
@@ -88,14 +89,20 @@ void Session::cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device) {
   assert_libusb_ok(ret, "Failed to request Flash properties");
 
   // Read response
-  uint8_t resp[2];
-  ret = libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_rx, resp, 2,
-                             &transferred, libusb_timeout_ms);
+  uint8_t resp[10] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+  ret = libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_rx, resp,
+                             sizeof(resp), &transferred, libusb_timeout_ms);
   assert_libusb_ok(ret, "Failed to read Flash properties response");
 
   // Pull out the mfgr/device
   *out_mfgr = resp[0];
   *out_device = resp[1];
+
+  // Unique ID
+  *out_unique_id = ((((uint64_t)resp[2]) << 56) | (((uint64_t)resp[3]) << 48) |
+                    (((uint64_t)resp[4]) << 40) | (((uint64_t)resp[5]) << 32) |
+                    (((uint64_t)resp[6]) << 24) | (((uint64_t)resp[7]) << 16) |
+                    (((uint64_t)resp[8]) << 8) | (((uint64_t)resp[9]) << 0));
 }
 
 } // namespace UsbProto
