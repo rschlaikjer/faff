@@ -210,6 +210,12 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
+  // Get the flash chip ID
+  uint8_t flash_mfgr, flash_device;
+  session.cmd_flash_identify(&flash_mfgr, &flash_device);
+  fprintf(stderr, "Flash chip mfgr: 0x%02x, Chip ID: 0x%02x\n", flash_mfgr,
+          flash_device);
+
   // Release the FPGA
   // session.cmd_fpga_reset_deassert();
 

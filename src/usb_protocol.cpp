@@ -79,4 +79,23 @@ bool Session::fpga_is_under_reset() {
          static_cast<uint8_t>(UsbProto::FpgaStatusFlags::FLAG_FPGA_UNDER_RESET);
 }
 
+void Session::cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device) {
+  uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_IDENTIFY)};
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to request Flash properties");
+
+  // Read response
+  uint8_t resp[2];
+  ret = libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_rx, resp, 2,
+                             &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to read Flash properties response");
+
+  // Pull out the mfgr/device
+  *out_mfgr = resp[0];
+  *out_device = resp[1];
+}
+
 } // namespace UsbProto
