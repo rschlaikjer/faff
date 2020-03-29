@@ -69,6 +69,22 @@ bool CliArgs::valid() {
   return true;
 }
 
+void CliArgs::report_errors() {
+  // If we got any bad / missing arguments, we aren't valid
+  if (_arguments_invalid)
+    fprintf(stderr, "Unexpected arguments encountered\n");
+
+  // If we didn't get a file specified then args are invalid
+  if (_file_path == nullptr)
+    fprintf(stderr, "No input file specified\n");
+
+  // If the USB vid/pid is out of range, args are invalid
+  if (_usb_vid < 0 || _usb_vid > 0xFFFF)
+    fprintf(stderr, "USB VID %x is outside allowable range\n", _usb_vid);
+  if (_usb_pid < 0 || _usb_pid > 0xFFFF)
+    fprintf(stderr, "USB PID %x is outside allowable range\n", _usb_pid);
+}
+
 bool CliArgs::parse(int argc, char **argv) {
   int c;
   int longopt_index = 0;

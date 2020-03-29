@@ -6,6 +6,7 @@ struct CliArgs {
   void usage();
   bool parse(int argc, char **argv);
   bool valid();
+  void report_errors();
 
 public:
   // Were sufficient arguments parsed to perform a useful action, or should the

@@ -206,6 +206,8 @@ int main(int argc, char **argv) {
 
   // If we didn't short circuit for help, and the args are invalid, error out
   if (!args.valid()) {
+    args.report_errors();
+    fprintf(stderr, "To view help, ruh %s -h\n", argv[0]);
     return EXIT_FAILURE;
   }
 
@@ -269,6 +271,7 @@ int main(int argc, char **argv) {
   // Start writing the flash. Every time we touch a new 4k sector, we need to
   // erase it before we can write it.
   uint32_t previous_sector = 0xFFFF'FFFF;
+  // TODO(ross): respect the LMA option
   for (unsigned byte_offset = 0; byte_offset < file->_size;) {
     // Mask off the sector bits
     uint32_t sector = byte_offset & 0xFF'FF'F0'00;
