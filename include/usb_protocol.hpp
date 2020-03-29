@@ -26,6 +26,10 @@ enum class Opcode : uint8_t {
   FLASH_QUERY_STATUS = 0x27,
 };
 
+enum class FpgaStatusFlags : uint8_t {
+  FLAG_FPGA_UNDER_RESET = (1 << 0),
+};
+
 class Session {
 public:
   Session(libusb_device_handle *usb_handle, CliArgs &args)
@@ -38,6 +42,7 @@ public:
   void cmd_fpga_reset_assert();
   void cmd_fpga_reset_deassert();
   void cmd_fpga_query_status(uint8_t *out_status);
+  bool fpga_is_under_reset();
 
   // Flash
 

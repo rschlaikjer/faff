@@ -204,11 +204,20 @@ int main(int argc, char **argv) {
   session.cmd_fpga_reset_assert();
   session.cmd_set_rgb_led(0, 64, 0);
 
-  uint8_t fpga_status;
-  session.cmd_fpga_query_status(&fpga_status);
-  fprintf(stderr, "FPGA state: 0x%02x\n", fpga_status);
+  // Verify we are now in programming mode
+  if (!session.fpga_is_under_reset()) {
+    fprintf(stderr, "Failed to assert FPGA reset\n");
+    return EXIT_FAILURE;
+  }
 
+  // Release the FPGA
   // session.cmd_fpga_reset_deassert();
+
+  // Verify we have properly released
+  if (session.fpga_is_under_reset()) {
+    fprintf(stderr, "Failed to release FPGA reset\n");
+    return EXIT_FAILURE;
+  }
 
   return EXIT_SUCCESS;
 }

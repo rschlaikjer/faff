@@ -72,4 +72,11 @@ void Session::cmd_fpga_query_status(uint8_t *out_status) {
   assert_libusb_ok(ret, "Failed to read FPGA state response");
 }
 
+bool Session::fpga_is_under_reset() {
+  uint8_t fpga_status;
+  cmd_fpga_query_status(&fpga_status);
+  return fpga_status &
+         static_cast<uint8_t>(UsbProto::FpgaStatusFlags::FLAG_FPGA_UNDER_RESET);
+}
+
 } // namespace UsbProto
