@@ -329,7 +329,7 @@ int main(int argc, char **argv) {
   }
 
   // Release the FPGA
-  // session.cmd_fpga_reset_deassert();
+  session.cmd_fpga_reset_deassert();
 
   // Verify we have properly released
   if (session.fpga_is_under_reset()) {
