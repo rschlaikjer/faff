@@ -28,4 +28,11 @@ public:
   // device that has the right vid:pid
   bool _usb_serial_specified = false;
   std::string _usb_serial = "";
+
+  // The file path to try and load
+  const char *_file_path = nullptr;
+
+  // Load address of the file.
+  // Defaults to the beginning of the flash.
+  unsigned _file_lma = 0x0;
 };

@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
   libusb_device_handle *usb_handle = get_device(args);
   if (usb_handle == nullptr) {
     fprintf(stderr, "Failed to find device with VID:PID %04x:%04x\n",
-            args._usb_pid, args._usb_vid);
+            args._usb_vid, args._usb_pid);
     return EXIT_FAILURE;
   }
 
@@ -127,8 +127,8 @@ int main(int argc, char **argv) {
 
   // Get the serial for this device
   std::string serial = get_serial_for_device(usb_handle);
-  fprintf(stderr, "Claimed interface %u on device with serial %s\n",
-          args._usb_interface, serial.c_str());
+  fprintf(stderr, "Claimed device %04x:%04x with serial %s\n", args._usb_vid,
+          args._usb_pid, serial.c_str());
 
   return EXIT_SUCCESS;
 }
