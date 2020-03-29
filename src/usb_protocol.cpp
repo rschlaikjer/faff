@@ -105,4 +105,58 @@ void Session::cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device,
                     (((uint64_t)resp[8]) << 8) | (((uint64_t)resp[9]) << 0));
 }
 
+void Session::cmd_flash_erase_4k(uint32_t addr) {
+  uint8_t cmd_out[] = {
+      static_cast<uint8_t>(Opcode::FLASH_ERASE_4K),
+      ((uint8_t)(addr >> 24)),
+      ((uint8_t)(addr >> 16)),
+      ((uint8_t)(addr >> 8)),
+      ((uint8_t)(addr >> 0)),
+  };
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to initiate 4k sector erase");
+}
+
+void Session::cmd_flash_erase_32k(uint32_t addr) {
+  uint8_t cmd_out[] = {
+      static_cast<uint8_t>(Opcode::FLASH_ERASE_32K),
+      ((uint8_t)(addr >> 24)),
+      ((uint8_t)(addr >> 16)),
+      ((uint8_t)(addr >> 8)),
+      ((uint8_t)(addr >> 0)),
+  };
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to initiate 32k sector erase");
+}
+
+void Session::cmd_flash_erase_64k(uint32_t addr) {
+  uint8_t cmd_out[] = {
+      static_cast<uint8_t>(Opcode::FLASH_ERASE_64K),
+      ((uint8_t)(addr >> 24)),
+      ((uint8_t)(addr >> 16)),
+      ((uint8_t)(addr >> 8)),
+      ((uint8_t)(addr >> 0)),
+  };
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to initiate 64k sector erase");
+}
+
+void Session::cmd_flash_erase_chip() {
+  uint8_t cmd_out[] = {static_cast<uint8_t>(Opcode::FLASH_ERASE_CHIP)};
+  int transferred = 0;
+  int ret =
+      libusb_bulk_transfer(_usb_handle, _args._usb_endpoint_tx, cmd_out,
+                           sizeof(cmd_out), &transferred, libusb_timeout_ms);
+  assert_libusb_ok(ret, "Failed to initiate chip erase");
+}
+
 } // namespace UsbProto

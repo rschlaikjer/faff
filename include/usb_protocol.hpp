@@ -47,6 +47,10 @@ public:
   // Flash
   void cmd_flash_identify(uint8_t *out_mfgr, uint8_t *out_device,
                           uint64_t *out_unique_id);
+  void cmd_flash_erase_4k(uint32_t addr);
+  void cmd_flash_erase_32k(uint32_t addr);
+  void cmd_flash_erase_64k(uint32_t addr);
+  void cmd_flash_erase_chip();
 
 private:
   void assert_libusb_ok(int code, const char *action);
