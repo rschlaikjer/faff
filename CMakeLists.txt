@@ -35,6 +35,7 @@ include_directories(${PC_LIBUSB_INCLUDE_DIRS})
 add_executable(faff
     src/main.cpp
     src/cmdline.cpp
+    src/usb_protocol.cpp
     )
 target_link_libraries(faff
     ${PC_LIBUSB_LIBRARIES}

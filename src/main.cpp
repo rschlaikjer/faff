@@ -12,17 +12,7 @@
 #include <string>
 
 #include <cmdline.hpp>
-
-#define LIBUSB_CHECK(EXPR, STR)                                                \
-  {                                                                            \
-    int result = EXPR;                                                         \
-    if (result < 0) {                                                          \
-      fprintf(stderr, STR " : %s (%d)\n", libusb_error_name(result), result);  \
-      exit(EXIT_FAILURE);                                                      \
-    }                                                                          \
-  }
-
-static const unsigned libusb_timeout_ms = 100;
+#include <usb_protocol.hpp>
 
 std::string get_serial_for_device(libusb_device_handle *handle) {
   struct libusb_device_descriptor desc;
@@ -160,28 +150,6 @@ std::unique_ptr<BitstreamFile> open_bitstream(const char *file_path) {
   return std::make_unique<BitstreamFile>(mmapped_data, file_size);
 }
 
-int cmd_set_rgb_led(libusb_device_handle *usb_handle, CliArgs &args, uint8_t r,
-                    uint8_t g, uint8_t b) {
-  uint8_t cmd_out[] = {0x01, r, g, b};
-  int transferred = 0;
-  return libusb_bulk_transfer(usb_handle, args._usb_endpoint_tx, cmd_out,
-                              sizeof(cmd_out), &transferred, libusb_timeout_ms);
-}
-
-int cmd_fpga_reset_assert(libusb_device_handle *usb_handle, CliArgs &args) {
-  uint8_t cmd_out[] = {0x10};
-  int transferred = 0;
-  return libusb_bulk_transfer(usb_handle, args._usb_endpoint_tx, cmd_out,
-                              sizeof(cmd_out), &transferred, libusb_timeout_ms);
-}
-
-int cmd_fpga_reset_deassert(libusb_device_handle *usb_handle, CliArgs &args) {
-  uint8_t cmd_out[] = {0x11};
-  int transferred = 0;
-  return libusb_bulk_transfer(usb_handle, args._usb_endpoint_tx, cmd_out,
-                              sizeof(cmd_out), &transferred, libusb_timeout_ms);
-}
-
 int main(int argc, char **argv) {
   CliArgs args;
   args.parse(argc, argv);
@@ -229,15 +197,18 @@ int main(int argc, char **argv) {
   fprintf(stderr, "Claimed device %04x:%04x with serial %s\n", args._usb_vid,
           args._usb_pid, serial.c_str());
 
-  // Disable the target FPGA so that we can control the SPI flash
-  LIBUSB_CHECK(cmd_fpga_reset_assert(usb_handle, args),
-               "Failed to enter programming mode");
-  LIBUSB_CHECK(cmd_set_rgb_led(usb_handle, args, 0, 64, 0),
-               "Failed to set RGB LED");
+  // Wrap it in a protocol layer
+  UsbProto::Session session(usb_handle, args);
 
-  // Deassert reset so the FPGA can load the new bitstream
-  // LIBUSB_CHECK(cmd_fpga_reset_deassert(usb_handle, args),
-  //              "Failed to exit programming mode");
+  // Disable the target FPGA so that we can control the SPI flash
+  session.cmd_fpga_reset_assert();
+  session.cmd_set_rgb_led(0, 64, 0);
+
+  uint8_t fpga_status;
+  session.cmd_fpga_query_status(&fpga_status);
+  fprintf(stderr, "FPGA state: 0x%02x\n", fpga_status);
+
+  // session.cmd_fpga_reset_deassert();
 
   return EXIT_SUCCESS;
 }
