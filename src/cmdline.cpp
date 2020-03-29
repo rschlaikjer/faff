@@ -7,7 +7,7 @@
 
 #include <cmdline.hpp>
 
-static const char *getopt_optstring = "hf:";
+static const char *getopt_optstring = "hf:e";
 static const struct option cmd_line_options[] = {
     {.name = "usb-vid",
      .has_arg = required_argument,
@@ -25,6 +25,7 @@ static const struct option cmd_line_options[] = {
     {.name = "file", .has_arg = required_argument, .flag = nullptr, .val = 0},
     {.name = "no-verify", .has_arg = no_argument, .flag = nullptr, .val = 0},
     {.name = "help", .has_arg = no_argument, .flag = nullptr, .val = 0},
+    {.name = "enumerate", .has_arg = no_argument, .flag = nullptr, .val = 0},
     // Final value must be sentinel
     {0, 0, 0, 0},
 };
@@ -36,6 +37,8 @@ fprintf(stderr, "faff: Find and Flash FPGA\n"
 "General options:\n"
 "    -h|--help              This help message\n"
 "    -f|--file  <binary>    The file that should be written to the target\n"
+"    -e|--enumerate         Print a list of connected device series that\n"
+"                           match the specified VID:PID\n"
 "    --lma <address>        The load memory address to use for the file.\n"
 "                           Defaults to 0x0000\n"
 "    --no-verify            Disable reading back the programmed file to\n"
@@ -97,6 +100,8 @@ bool CliArgs::parse(int argc, char **argv) {
       _help_selected = true;
     } else if (c == 'f') {
       _file_path = optarg;
+    } else if (c == 'e') {
+      _enumerate_only = true;
     } else if (c == 0) {
       // Long option
       const char *option_name = cmd_line_options[longopt_index].name;
@@ -115,6 +120,8 @@ bool CliArgs::parse(int argc, char **argv) {
         _file_path = optarg;
       } else if (!strcmp("no-verify", option_name)) {
         _verify_programmed = false;
+      } else if (!strcmp("enumerate", option_name)) {
+        _enumerate_only = true;
       }
     }
   }

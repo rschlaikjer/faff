@@ -43,4 +43,8 @@ public:
 
   // Should we read-back the programmed data to verify it
   bool _verify_programmed = true;
+
+  // If set, we should enumerate possible targets but not perform any other
+  // action.
+  bool _enumerate_only = false;
 };

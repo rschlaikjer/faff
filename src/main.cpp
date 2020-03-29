@@ -105,6 +105,60 @@ libusb_device_handle *get_device(CliArgs &args) {
   return nullptr;
 }
 
+void enumerate_devices(CliArgs &args) {
+  // Get a list of all the USB devices in the system
+  libusb_device **devices;
+  ssize_t device_count = libusb_get_device_list(nullptr, &devices);
+
+  // Create a scoped pointer to free the list again
+  std::shared_ptr<void> _defer_free_device_list(
+      nullptr,
+      [=](...) { // Decref and free device list
+        libusb_free_device_list(devices, 1);
+      });
+
+  fprintf(stderr, "Searching for devices with VID:PID %04x:%04x\n",
+          args._usb_vid, args._usb_pid);
+
+  // Iterate the devices, and if they match VID:PID print their serial
+  unsigned devices_found = 0;
+  for (ssize_t i = 0; i < device_count; i++) {
+    // Read the descriptor for this device
+    libusb_device_descriptor desc{};
+    int ret = libusb_get_device_descriptor(devices[i], &desc);
+    if (ret < 0) {
+      fprintf(stderr, "Failed to get device descriptor: %s (%d)\n",
+              libusb_error_name(ret), ret);
+      exit(EXIT_FAILURE);
+    }
+
+    // Is the VID:PID correct?
+    if (desc.idVendor != args._usb_vid || desc.idProduct != args._usb_pid)
+      continue;
+
+    // Open that device up
+    libusb_device_handle *handle;
+    ret = libusb_open(devices[i], &handle);
+    if (ret < 0) {
+      fprintf(stderr, "Failed to open device: %s (%d)\n",
+              libusb_error_name(ret), ret);
+      continue;
+    }
+
+    // Get and print the serial
+    std::string device_serial = get_serial_for_device(handle);
+
+    fprintf(stderr, "[%u] Serial: %s\n", devices_found++,
+            device_serial.c_str());
+  }
+
+  if (devices_found) {
+    fprintf(stderr, "Found %u devices\n", devices_found);
+  } else {
+    fprintf(stderr, "Failed to find any devices\n");
+  }
+}
+
 struct BitstreamFile {
   BitstreamFile(uint8_t *data, off_t size) : _data(data), _size(size) {}
   ~BitstreamFile() { munmap(_data, _size); }
@@ -204,6 +258,18 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
   }
 
+  // Attempt to init libusb
+  if (libusb_init(NULL) < 0) {
+    fprintf(stderr, "Failed to initialize libusb\n");
+    return EXIT_FAILURE;
+  }
+
+  // If we are in enumerate only mode, print available devices and exit
+  if (args._enumerate_only) {
+    enumerate_devices(args);
+    return EXIT_SUCCESS;
+  }
+
   // If we didn't short circuit for help, and the args are invalid, error out
   if (!args.valid()) {
     args.report_errors();
@@ -215,12 +281,6 @@ int main(int argc, char **argv) {
   std::unique_ptr<BitstreamFile> file = open_bitstream(args._file_path);
   if (file == nullptr) {
     fprintf(stderr, "Failed to open bitstream file '%s'\n", args._file_path);
-  }
-
-  // Attempt to init libusb
-  if (libusb_init(NULL) < 0) {
-    fprintf(stderr, "Failed to initialize libusb\n");
-    return EXIT_FAILURE;
   }
 
   // Try and open USB device
