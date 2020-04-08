@@ -281,6 +281,7 @@ int main(int argc, char **argv) {
   std::unique_ptr<BitstreamFile> file = open_bitstream(args._file_path);
   if (file == nullptr) {
     fprintf(stderr, "Failed to open bitstream file '%s'\n", args._file_path);
+    return EXIT_FAILURE;
   }
 
   // Try and open USB device
@@ -332,9 +333,10 @@ int main(int argc, char **argv) {
   // erase it before we can write it.
   uint32_t previous_sector = 0xFFFF'FFFF;
   // TODO(ross): respect the LMA option
+  // unsigned _file_lma = 0x0;
   for (unsigned byte_offset = 0; byte_offset < file->_size;) {
     // Mask off the sector bits
-    uint32_t sector = byte_offset & 0xFF'FF'F0'00;
+    uint32_t sector = (args._file_lma + byte_offset) & 0xFF'FF'F0'00;
     if (sector != previous_sector) {
       // Start the erase operation
       session.cmd_flash_erase_4k(sector);
@@ -353,12 +355,12 @@ int main(int argc, char **argv) {
                                ? sizeof(data)
                                : (file->_size - byte_offset);
     memcpy(data, &file->_data[byte_offset], bytes_to_copy);
-    fprintf(stderr, "Programming block 0x%08" PRIx32 " / 0x%08lx\r",
-            byte_offset, file->_size);
-    session.cmd_flash_write(byte_offset, data, bytes_to_copy);
+    fprintf(stderr, "Programming block 0x%012" PRIx32 " / 0x%012lx\r",
+            args._file_lma + byte_offset, args._file_lma + file->_size);
+    session.cmd_flash_write(args._file_lma + byte_offset, data, bytes_to_copy);
 
     // Increment byte offset
-    byte_offset += sizeof(data);
+    byte_offset += bytes_to_copy;
 
     // Wait for write in progress bit to clear again
     do {
@@ -374,9 +376,9 @@ int main(int argc, char **argv) {
       size_t bytes_to_copy = ((long)sizeof(data)) < (file->_size - byte_offset)
                                  ? sizeof(data)
                                  : (file->_size - byte_offset);
-      fprintf(stderr, "Reading block 0x%08" PRIx32 " / 0x%08lx\r", byte_offset,
-              file->_size);
-      session.cmd_flash_read(byte_offset, data, bytes_to_copy);
+      fprintf(stderr, "Reading block 0x%012" PRIx32 " / 0x%012lx\r",
+              args._file_lma + byte_offset, args._file_lma + file->_size);
+      session.cmd_flash_read(args._file_lma + byte_offset, data, bytes_to_copy);
 
       // Compare the read block with the real bitstream
       if (memcmp(data, &file->_data[byte_offset], bytes_to_copy) != 0) {
@@ -386,7 +388,7 @@ int main(int argc, char **argv) {
       }
 
       // Increment byte offset
-      byte_offset += sizeof(data);
+      byte_offset += bytes_to_copy;
     }
     fprintf(stderr, "\n");
   }

@@ -115,7 +115,8 @@ bool CliArgs::parse(int argc, char **argv) {
         _usb_serial_specified = true;
         _usb_serial = std::string(optarg);
       } else if (!strcmp("lma", option_name)) {
-        _file_lma = std::stoi(optarg);
+        _file_lma = std::stoi(optarg, nullptr, 0);
+        fprintf(stderr, "Set file LMA to %s %u\n", optarg, _file_lma);
       } else if (!strcmp("file", option_name)) {
         _file_path = optarg;
       } else if (!strcmp("no-verify", option_name)) {
